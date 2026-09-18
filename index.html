@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111111"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png">
+<title>Progressive Overload Tracker</title>
+<style>
+:root{--bg:#f5f4f2;--card:#fff;--ink:#171717;--muted:#777;--line:#e7e4df;--accent:#111;--good:#2d7a4b}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+header{background:#111;color:#fff;padding:24px 18px 20px;position:sticky;top:0;z-index:5}
+h1{font-size:24px;margin:0 0 4px;font-weight:800}.sub{font-size:13px;color:#bbb}
+nav{display:flex;gap:8px;overflow:auto;padding:12px 12px 4px;background:var(--bg);position:sticky;top:86px;z-index:4}
+nav button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 13px;white-space:nowrap;font-weight:700}
+nav button.active{background:#111;color:#fff;border-color:#111}
+main{max-width:720px;margin:auto;padding:10px 14px 90px}
+.day{display:none}.day.active{display:block}.intro{font-size:13px;color:#666;margin:8px 2px 14px;line-height:1.45}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;margin:12px 0;padding:15px;box-shadow:0 2px 10px rgba(0,0,0,.03)}
+.exercise-title{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.exercise-title h3{font-size:16px;margin:0;line-height:1.2}.tag{font-size:10px;background:#eee;border-radius:999px;padding:5px 7px;font-weight:800;white-space:nowrap}
+.meta{font-size:12px;color:var(--muted);margin:6px 0 12px}
+.sets{display:grid;grid-template-columns:32px 1fr 1fr 1fr;gap:7px;align-items:center}
+.sets .head{font-size:10px;text-transform:uppercase;color:#888;font-weight:800}
+.setnum{font-weight:800;text-align:center;font-size:12px}
+input{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 7px;font-size:14px;background:#fafafa}
+input:focus{outline:2px solid #bbb;background:#fff}
+.actions{display:flex;gap:8px;margin-top:11px}.actions button,.bottom button{border:0;border-radius:10px;padding:10px 12px;font-weight:800;background:#eee}
+.actions .save{background:#111;color:#fff;flex:1}.actions .history{flex:0 0 auto}
+.progress{background:#111;color:#fff;border-radius:16px;padding:16px;margin:12px 0}
+.progress h2{margin:0 0 8px;font-size:17px}.progress p{margin:5px 0;font-size:12px;color:#ccc}
+.exercise-history{margin-top:10px;font-size:12px;line-height:1.55}
+.history-row{padding:7px 0;border-bottom:1px solid #333}.history-row:last-child{border:0}
+.section-title{font-size:18px;margin:22px 2px 8px}.note{font-size:11px;color:#777}
+.bottom{position:fixed;bottom:0;left:0;right:0;background:rgba(245,244,242,.96);backdrop-filter:blur(10px);padding:10px 14px;display:flex;gap:8px;border-top:1px solid var(--line);z-index:6}
+.bottom button{flex:1}.bottom .danger{background:#fff;border:1px solid #ddd}
+.toast{position:fixed;bottom:75px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 14px;border-radius:999px;font-size:12px;opacity:0;pointer-events:none;transition:.2s;z-index:20}.toast.show{opacity:1}
+@media(min-width:700px){nav{justify-content:center}.sets{grid-template-columns:40px 1fr 1fr 1fr}}
+</style>
+</head>
+<body>
+<header><h1>Progressive Overload</h1><div class="sub">Log your working weights • track your strength over time</div></header>
+<nav id="tabs"></nav>
+<main id="app"></main>
+<div id="installBanner" style="display:none;position:fixed;left:13px;right:13px;bottom:70px;background:#111;color:#fff;padding:12px;border-radius:14px;z-index:19">
+    <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;font-size:11px"><b>Install the app</b><br><span style="color:#bbb">Add Progressive Overload to your home screen.</span></div><button id="installBtn" style="border:0;border-radius:9px;padding:9px 11px;font-weight:800">Install</button></div>
+  </div>
+  <div class="bottom">
+  <button onclick="showProgress()">📈 Progress</button>
+  <button onclick="exportData()">⬇ Export</button>
+  <button class="danger" onclick="clearData()">Reset data</button>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+const plan = {
+"Legs / Glutes":[
+["Hack Squat / Squat","Compound","3–4 × 6–12"],
+["Romanian Deadlift","Compound","3–4 × 6–12"],
+["Hip Thrust","Compound","3–4 × 6–12"],
+["Leg Press","Compound","3–4 × 8–12"],
+["Leg Extension","Isolation","3–4 × 10–15"],
+["Leg Curl","Isolation","3–4 × 10–15"],
+["Calf Raises","Isolation","3–4 × 10–20"]],
+"Back":[
+["Lat Pulldown","Compound","3–4 × 8–15"],
+["Chest-Supported Row","Compound","3–4 × 8–12"],
+["One-Arm Row","Compound","3–4 × 8–12"],
+["Seated Cable Row","Compound","3–4 × 8–15"],
+["Straight-Arm Pulldown","Isolation","3–4 × 10–15"],
+["Rear-Delt Fly","Isolation","3–4 × 12–20"]],
+"Chest":[
+["Incline Press","Compound","3–4 × 6–12"],
+["Flat Press","Compound","3–4 × 6–12"],
+["Machine Press","Compound","3–4 × 8–12"],
+["Cable Fly","Isolation","3–4 × 10–15"],
+["Pec Deck","Isolation","3–4 × 10–15"]],
+"Shoulders":[
+["Shoulder Press","Compound","3–4 × 6–12"],
+["Lateral Raise","Isolation","3–4 × 10–20"],
+["Cable Lateral Raise","Isolation","3–4 × 10–20"],
+["Rear-Delt Fly","Isolation","3–4 × 12–20"],
+["Face Pull","Isolation","3–4 × 12–20"]],
+"Arms":[
+["Assisted Dips","Compound","3–4 × 8–15"],
+["EZ-Bar Curl","Isolation","3–4 × 8–15"],
+["Triceps Pressdown","Isolation","3–4 × 8–15"],
+["Incline Curl","Isolation","3–4 × 8–15"],
+["Overhead Extension","Isolation","3–4 × 8–15"],
+["Cable Curl","Isolation","3–4 × 10–15"]]
+};
+
+let data = JSON.parse(localStorage.getItem("polTracker") || "{}");
+let currentDay = Object.keys(plan)[0];
+
+function key(day, ex){return day+"||"+ex}
+function save(){localStorage.setItem("polTracker",JSON.stringify(data))}
+function toast(t){let x=document.getElementById("toast");x.textContent=t;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),1400)}
+
+function renderTabs(){
+ const n=document.getElementById("tabs"); n.innerHTML="";
+ Object.keys(plan).forEach(day=>{let b=document.createElement("button");b.textContent=day;b.className=day===currentDay?"active":"";b.onclick=()=>{currentDay=day;render()};n.appendChild(b)})
+}
+function render(){
+ renderTabs(); const app=document.getElementById("app"); app.innerHTML="";
+ Object.keys(plan).forEach(day=>{
+  let sec=document.createElement("section");sec.className="day"+(day===currentDay?" active":"");sec.id="day-"+day.replace(/\W/g,"");
+  sec.innerHTML=`<div class="intro"><b>${day}</b> — Start with the heaviest, most demanding movements while fresh, then move to supported/isolated work. Aim to finish most working sets with about 1–3 good reps still possible. Rest ~2–3 min on compounds and 60–120 sec on isolation work.</div>`;
+  plan[day].forEach((e,i)=>{
+   let k=key(day,e[0]), hist=data[k]||[], last=hist[hist.length-1];
+    let nextTarget="";
+    if(last){
+      const ws=last.weights.map(Number).filter(Boolean), rs=last.reps.map(Number).filter(Boolean);
+      if(ws.length && rs.length) nextTarget=Math.max(...rs)>=12 ? `Next target: ${(Math.max(...ws)+2.5).toFixed(1)} kg` : "Next target: same weight • add reps";
+    }
+   let card=document.createElement("div");card.className="card";
+   card.innerHTML=`<div class="exercise-title"><h3>${i+1}. ${e[0]}</h3><span class="tag">${e[1]}</span></div>
+   <div class="meta">${e[2]} • ${last?`Last: ${last.weights.map((w,j)=>w?`${w} kg × ${last.reps[j]||"?"}`:"—").join(" | ")}`:"No previous log"}</div>${nextTarget?`<div class="meta"><b>↗ ${nextTarget}</b></div>`:""}
+   <div class="sets"><div class="head">Set</div><div class="head">Weight kg</div><div class="head">Reps</div><div class="head">Done</div>
+   ${[1,2,3,4].map(s=>`<div class="setnum">${s}</div><input inputmode="decimal" id="${cssId(k)}w${s}" placeholder="kg"><input inputmode="numeric" id="${cssId(k)}r${s}" placeholder="reps"><input type="checkbox" id="${cssId(k)}d${s}" style="width:20px;height:20px;justify-self:center">`).join("")}</div>
+   <div class="actions"><button class="save" onclick="logExercise(${JSON.stringify(day)},${JSON.stringify(e[0])})">Save workout</button><button class="history" onclick="showExerciseHistory(${JSON.stringify(day)},${JSON.stringify(e[0])})">History</button></div>
+   <div class="exercise-history" id="hist-${cssId(k)}"></div>`;
+   sec.appendChild(card);
+  }); app.appendChild(sec);
+ });
+}
+function cssId(s){return "x"+btoa(unescape(encodeURIComponent(s))).replace(/[^a-zA-Z0-9]/g,"").slice(0,35)}
+function vals(day,ex){
+ let k=key(day,ex), id=cssId(k), weights=[], reps=[];
+ for(let i=1;i<=4;i++){weights.push(document.getElementById(id+"w"+i)?.value||"");reps.push(document.getElementById(id+"r"+i)?.value||"")}
+ return {weights,reps}
+}
+function logExercise(day,ex){
+ let v=vals(day,ex); if(!v.weights.some(Boolean)){toast("Enter at least one weight");return}
+ let k=key(day,ex); if(!data[k])data[k]=[];
+ data[k].push({date:new Date().toISOString(),weights:v.weights,reps:v.reps});
+ save(); toast("Workout saved ✓"); render();
+}
+function showExerciseHistory(day,ex){
+ let k=key(day,ex), h=data[k]||[], el=document.getElementById("hist-"+cssId(k));
+ if(!h.length){el.textContent="No history yet.";return}
+ el.innerHTML=h.slice(-6).reverse().map(x=>`<div class="history-row"><b>${new Date(x.date).toLocaleDateString()}</b> — ${x.weights.map((w,i)=>w?`${w} kg × ${x.reps[i]||"?"}`:"").filter(Boolean).join(" • ")}</div>`).join("");
+}
+function showProgress(){
+ const app=document.getElementById("app");document.querySelectorAll(".day").forEach(x=>x.classList.remove("active"));
+ let keys=Object.keys(data);app.innerHTML=`<div class="progress"><h2>Progress overview</h2><p>Your data is stored on this phone in this browser.</p><p>${keys.length} exercises logged.</p></div>`;
+ if(!keys.length){app.innerHTML+=`<div class="card">No workouts logged yet. Complete a workout and tap <b>Save workout</b>.</div>`;return}
+ keys.forEach(k=>{
+  let h=data[k], [day,ex]=k.split("||"), first=h[0], last=h[h.length-1];
+  let start=Math.max(...first.weights.map(Number).filter(Boolean),0), current=Math.max(...last.weights.map(Number).filter(Boolean),0);
+  let change=(current-start).toFixed(1);
+  let c=document.createElement("div");c.className="card";c.innerHTML=`<div class="exercise-title"><h3>${ex}</h3><span class="tag">${day}</span></div><div class="meta">First logged top weight: ${start||"—"} kg • Latest: ${current||"—"} kg • Change: ${change>=0?"+":""}${change} kg</div><div class="exercise-history">${h.slice(-8).reverse().map(x=>`<div class="history-row"><b>${new Date(x.date).toLocaleDateString()}</b> — ${x.weights.map((w,i)=>w?`${w} kg × ${x.reps[i]||"?"}`:"").filter(Boolean).join(" • ")}</div>`).join("")}</div>`;
+  app.appendChild(c);
+ })
+}
+function exportData(){
+ let blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}), a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="progressive-overload-data.json";a.click();URL.revokeObjectURL(a.href);toast("Data exported");
+}
+function clearData(){if(confirm("Delete all logged workouts from this phone?")){data={};save();render();toast("Data reset")}}
+render();
+</script>
+<script>
+let deferredInstallPrompt=null;
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredInstallPrompt=e;document.getElementById("installBanner").style.display="block"});
+document.getElementById("installBtn").onclick=async()=>{if(!deferredInstallPrompt)return;deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;document.getElementById("installBanner").style.display="none"};
+if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+</script></body>
+</html>
